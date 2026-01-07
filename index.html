@@ -625,6 +625,43 @@
             margin-bottom: 10px;
         }
         
+        /* 新增的当月消费统计样式 */
+        .monthly-consumption {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        
+        .monthly-stat {
+            background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+            color: white;
+            border-radius: 12px;
+            padding: 20px;
+            flex: 1;
+            min-width: 250px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+        
+        .monthly-stat h3 {
+            font-size: 1rem;
+            margin-bottom: 10px;
+            opacity: 0.9;
+        }
+        
+        .monthly-amount {
+            font-size: 1.8rem;
+            font-weight: 700;
+            margin-bottom: 5px;
+        }
+        
+        .monthly-detail {
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }
+        
         @media (max-width: 768px) {
             .header-content {
                 flex-direction: column;
@@ -666,6 +703,10 @@
             
             .debug-actions {
                 flex-direction: column;
+            }
+            
+            .monthly-stat {
+                min-width: 100%;
             }
         }
     </style>
@@ -725,6 +766,25 @@
                 <button class="btn debug-btn" id="inspectGistData">
                     <i class="fas fa-search"></i> 检查Gist数据
                 </button>
+            </div>
+        </div>
+        
+        <!-- 当月消费统计 -->
+        <div class="monthly-consumption">
+            <div class="monthly-stat">
+                <h3><i class="fas fa-calendar-alt"></i> 当月总消费</h3>
+                <div class="monthly-amount">¥ <span id="monthlyTotalExpense">0.00</span></div>
+                <div class="monthly-detail">本月已消费总额</div>
+            </div>
+            <div class="monthly-stat" style="background: linear-gradient(135deg, #f72585 0%, #b5179e 100%);">
+                <h3><i class="fas fa-chart-line"></i> 当月平均消费</h3>
+                <div class="monthly-amount">¥ <span id="monthlyAverageExpense">0.00</span></div>
+                <div class="monthly-detail">平均每天 <span id="dailyAverageExpense">0.00</span> 元</div>
+            </div>
+            <div class="monthly-stat" style="background: linear-gradient(135deg, #4cc9f0 0%, #3a86ff 100%);">
+                <h3><i class="fas fa-info-circle"></i> 当月消费信息</h3>
+                <div class="monthly-amount" style="font-size: 1.4rem;">本月第 <span id="currentDay">1</span> 天</div>
+                <div class="monthly-detail">本月消费天数: <span id="consumptionDays">0</span> 天</div>
             </div>
         </div>
         
@@ -909,7 +969,12 @@
             dataInspectorVisible: localStorage.getItem('dataInspectorVisible') === 'true' || false,
             totalBalance: 0,
             totalIncome: 0,
-            totalExpense: 0
+            totalExpense: 0,
+            monthlyTotalExpense: 0, // 新增：当月总消费
+            monthlyAverageExpense: 0, // 新增：当月平均消费
+            dailyAverageExpense: 0, // 新增：日均消费
+            currentDay: 1, // 新增：当前日期
+            consumptionDays: 0 // 新增：本月消费天数
         };
         
         // DOM元素
@@ -949,7 +1014,13 @@
             dataInspector: document.getElementById('dataInspector'),
             dataContent: document.getElementById('dataContent'),
             clearDataInspector: document.getElementById('clearDataInspector'),
-            toggleDebugPanel: document.getElementById('toggleDebugPanel')
+            toggleDebugPanel: document.getElementById('toggleDebugPanel'),
+            // 新增：当月消费相关元素
+            monthlyTotalExpense: document.getElementById('monthlyTotalExpense'),
+            monthlyAverageExpense: document.getElementById('monthlyAverageExpense'),
+            dailyAverageExpense: document.getElementById('dailyAverageExpense'),
+            currentDay: document.getElementById('currentDay'),
+            consumptionDays: document.getElementById('consumptionDays')
         };
         
         // 调试日志
@@ -1479,6 +1550,48 @@
             }
         }
         
+        // 计算当月消费统计
+        function calculateMonthlyConsumption() {
+            const now = new Date();
+            const currentYear = now.getFullYear();
+            const currentMonth = now.getMonth();
+            const currentDay = now.getDate();
+            
+            // 更新当前日期
+            state.currentDay = currentDay;
+            elements.currentDay.textContent = currentDay;
+            
+            // 筛选当月的支出记录
+            const monthlyExpenses = state.records.filter(record => {
+                if (record.type !== 'expense') return false;
+                
+                const recordDate = new Date(record.date);
+                return (
+                    recordDate.getFullYear() === currentYear &&
+                    recordDate.getMonth() === currentMonth
+                );
+            });
+            
+            // 计算当月总消费
+            state.monthlyTotalExpense = monthlyExpenses.reduce((sum, record) => sum + record.amount, 0);
+            
+            // 计算当月消费天数（有消费记录的天数）
+            const expenseDays = new Set();
+            monthlyExpenses.forEach(record => {
+                const recordDate = new Date(record.date);
+                expenseDays.add(recordDate.getDate());
+            });
+            state.consumptionDays = expenseDays.size;
+            
+            // 计算当月平均消费（当月总消费 / 当前日期数）
+            state.monthlyAverageExpense = currentDay > 0 ? state.monthlyTotalExpense / currentDay : 0;
+            
+            // 计算日均消费（当月总消费 / 本月消费天数）
+            state.dailyAverageExpense = state.consumptionDays > 0 ? state.monthlyTotalExpense / state.consumptionDays : 0;
+            
+            debugLog(`当月消费统计: 总消费=${state.monthlyTotalExpense.toFixed(2)}, 平均消费=${state.monthlyAverageExpense.toFixed(2)}, 消费天数=${state.consumptionDays}`, 'info');
+        }
+        
         // 更新UI
         function updateUI() {
             debugLog('开始更新UI', 'info');
@@ -1486,12 +1599,21 @@
             // 计算统计信息
             calculateStats();
             
+            // 计算当月消费统计
+            calculateMonthlyConsumption();
+            
             // 更新统计显示
             elements.totalBalance.textContent = state.totalBalance.toFixed(2);
             elements.totalIncome.textContent = state.totalIncome.toFixed(2);
             elements.totalExpense.textContent = state.totalExpense.toFixed(2);
             elements.bankCount.textContent = state.banks.length;
             elements.recordCount.textContent = state.records.length;
+            
+            // 更新当月消费统计显示
+            elements.monthlyTotalExpense.textContent = state.monthlyTotalExpense.toFixed(2);
+            elements.monthlyAverageExpense.textContent = state.monthlyAverageExpense.toFixed(2);
+            elements.dailyAverageExpense.textContent = state.dailyAverageExpense.toFixed(2);
+            elements.consumptionDays.textContent = state.consumptionDays;
             
             // 更新银行卡列表
             renderBankList();
